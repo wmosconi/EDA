@@ -1,0 +1,190 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sqlalchemy import create_engine
+from scipy.stats.stats import ttest_ind
+import warnings
+
+warnings.filterwarnings('ignore')
+sns.set(style="whitegrid")
+
+postgres_user = 'dsbc_student'
+postgres_pw = '7*.8G9QH21'
+postgres_host = '142.93.121.174'
+postgres_port = '5432'
+postgres_db = 'studentsperformance'
+
+engine = create_engine('postgresql://{}:{}@{}:{}/{}'.format(
+    postgres_user, postgres_pw, postgres_host, postgres_port, postgres_db))
+
+education_df = pd.read_sql_query('select * from studentsperformance',con=engine)
+
+engine.dispose()
+
+## 1. Are the exam score variables distributed normally? If not, apply Box-Cox transformation. Does anything change?
+
+from scipy.stats import boxcox
+
+# there is an observation with math score is equal to 0
+# since box-cox transformation only works with positive data
+# we are excluding it.
+math_boxcox,_ = boxcox(education_df[education_df["math score"] > 0]["math score"])
+reading_boxcox,_ = boxcox(education_df["reading score"])
+writing_boxcox,_ = boxcox(education_df["writing score"])
+
+plt.figure(figsize=(18,10))
+
+plt.subplot(2, 3, 1)
+plt.hist(education_df["math score"])
+plt.title("histogram of math score")
+
+plt.subplot(2, 3, 2)
+plt.hist(education_df["reading score"])
+plt.title("histogram of reading score")
+
+plt.subplot(2, 3, 3)
+plt.hist(education_df["writing score"])
+plt.title("histogram of writing score")
+
+plt.subplot(2, 3, 4)
+plt.hist(math_boxcox)
+plt.title("histogram of math score (box-cox transformed)")
+
+plt.subplot(2, 3, 5)
+plt.hist(reading_boxcox)
+plt.title("histogram of reading score (box-cox transformed)")
+
+plt.subplot(2, 3, 6)
+plt.hist(writing_boxcox)
+plt.title("histogram of writing score (box-cox transformed)")
+
+plt.show()
+
+## They are not distributed normally. Jarque-Bera and Normal tests also confirm this:
+
+from scipy.stats import jarque_bera
+from scipy.stats import normaltest
+
+jb_stats = jarque_bera(education_df["math score"])
+norm_stats = normaltest(education_df["math score"])
+
+print("Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+jb_stats = jarque_bera(education_df["reading score"])
+norm_stats = normaltest(education_df["reading score"])
+
+print("Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+jb_stats = jarque_bera(education_df["writing score"])
+norm_stats = normaltest(education_df["writing score"])
+
+print("Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+##After we applied Box-Cox transformation, the distributions come closer to the normal distribution shape. The Jarque-Bera test also indicates that transformed variables are all normally distributed with 5% significance level:
+
+jb_stats = jarque_bera(math_boxcox)
+norm_stats = normaltest(math_boxcox)
+
+print("Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+jb_stats = jarque_bera(reading_boxcox)
+norm_stats = normaltest(reading_boxcox)
+
+print("Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+jb_stats = jarque_bera(writing_boxcox)
+norm_stats = normaltest(writing_boxcox)
+
+print("Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+##2. Say, we want to use a single variable for the exam scores as our target. For this purpose, create a new variable by taking a weighted average of the exam scores. Check whether this new variable is normally distributed or not. If it's not normally distributed, apply Box-Cox transformation and check whether the transformed variable is normally distributed.
+
+exam_score = (education_df["math score"] +
+              education_df["reading score"] + education_df["writing score"])/3
+
+plt.hist(exam_score)
+plt.title("histogram of exam score")
+plt.show()
+
+jb_stats = jarque_bera(exam_score)
+norm_stats = normaltest(exam_score)
+
+print("Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+##Jarque-Bera test statistics is 15.453387913085164 and p value is 0.00044089934264401887
+##Normality test statistics is 15.186721327231322 and p value is 0.0005037851534494478
+##The new variable is not normally distributed.
+
+exams_boxcox,_ = boxcox(exam_score)
+
+plt.hist(exams_boxcox)
+plt.title("histogram of exam score (box-cox transformed)")
+plt.show()
+
+jb_stats = jarque_bera(exams_boxcox)
+norm_stats = normaltest(exams_boxcox)
+
+print("Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+##Jarque-Bera test statistics is 2.4353987431906026 and p value is 0.29591016374203183
+##Normality test statistics is 2.779857245981238 and p value is 0.2490930835165177
+##After we applied Box-Cox transformation, the transformed variable is now normally distributed. Jarque-Bera and Normal tests also confirm this.
+
+##3. Which variables do seem to be related with the target variable (the newly created variable in the previous question)? If our goal is to explain the determinants of the success in the exams, which variables in our dataset might be useful?
+
+education_df["exam_score"] = exam_score
+
+plt.figure(figsize=(18, 10))
+
+plt.subplot(2, 3, 1)
+plt.bar(education_df.groupby("race/ethnicity")
+        ["exam_score"].mean().index, education_df.groupby("race/ethnicity")["exam_score"].mean())
+
+plt.title("average exam scores wrt. race/ethnicity")
+plt.xticks(rotation="vertical")
+
+plt.subplot(2, 3, 2)
+plt.bar(education_df.groupby("gender")
+        ["exam_score"].mean().index, education_df.groupby("gender")["exam_score"].mean())
+
+plt.title("average exam scores wrt. gender")
+plt.xticks(rotation="vertical")
+
+plt.subplot(2, 3, 3)
+plt.bar(education_df.groupby("parental level of education")
+        ["exam_score"].mean().index, education_df.groupby("parental level of education")["exam_score"].mean())
+
+plt.title("average exam scores wrt. parental level of education")
+plt.xticks(rotation="vertical")
+
+plt.subplot(2, 3, 4)
+plt.bar(education_df.groupby("lunch")
+        ["exam_score"].mean().index, education_df.groupby("lunch")["exam_score"].mean())
+
+plt.title("average exam scores wrt. lunch")
+plt.xticks(rotation="vertical")
+
+plt.subplot(2, 3, 5)
+plt.bar(education_df.groupby("test preparation course")
+        ["exam_score"].mean().index, education_df.groupby("test preparation course")["exam_score"].mean())
+
+plt.title("average exam scores wrt. test preparation course")
+plt.xticks(rotation="vertical")
+
+plt.tight_layout()
+plt.show()
+
+##Average exam score increases from group A to group E. Hence race/ethnicity may play an important role in explaining the successes in the exams.
+##Female students seem to be more successful than the males.
+##There is also some variation between the parental levels of education with respect to the exam scores.
+##Lunch type also exhibits variance in the average exam scores. But, this is probably not because of the lunch type itself but because of something that affects both the lunch type and the exam scores.
+##Those who completed the test preparation course seem to be more successful than the others.
+##Considering all these, all variables might be used in explaining the success in the exams but the lunch variable should be used precautiously.
