@@ -1,0 +1,95 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from sqlalchemy import create_engine
+from scipy.stats.stats import ttest_ind
+import warnings
+
+warnings.filterwarnings('ignore')
+
+postgres_user = 'dsbc_student'
+postgres_pw = '7*.8G9QH21'
+postgres_host = '142.93.121.174'
+postgres_port = '5432'
+postgres_db = 'studentsperformance'
+
+engine = create_engine('postgresql://{}:{}@{}:{}/{}'.format(
+    postgres_user, postgres_pw, postgres_host, postgres_port, postgres_db))
+
+education_df = pd.read_sql_query('select * from studentsperformance',con=engine)
+
+# no need for an open connection, 
+# as we're only doing a single query
+engine.dispose()
+
+## Are there any differences between the genders, ethnicities and parental level of education with respect to their performances in exams?
+
+student_df.groupby("gender").mean()[["math score", "reading score", "writing score"]]
+
+ttest_ind(student_df[student_df.gender == "female"][["math score", "reading score", "writing score"]],
+          student_df[student_df.gender == "male"][["math score", "reading score", "writing score"]])
+          
+Ttest_indResult(statistic=array([-5.38324587,  7.95930801,  9.97955791]), pvalue=array([9.12018555e-08, 4.68053874e-15, 2.01987771e-22]))
+##It seems that females are more successful at reading and writing whereas males are more successful at math. The t-tests justify that the differences are statistically significant.
+
+student_df.groupby("race/ethnicity").mean()[["math score", "reading score", "writing score"]]
+
+ethnicities = student_df["race/ethnicity"].unique()
+grouped_df = student_df.groupby("race/ethnicity")
+for var in ["math score", "reading score", "writing score"]:
+    print("------------------------------------------------")
+    print("Comparisons for variable: {}".format(var))
+    print("------------------------------------------------")
+    for i in range(0, len(ethnicities)):
+        for j in range(i+1, len(ethnicities)):
+            print(
+                "t-test between groups {0} and {1}:".format(ethnicities[i], ethnicities[j]))
+            print(ttest_ind(
+                student_df[student_df["race/ethnicity"]
+                           == ethnicities[i]][var],
+                student_df[student_df["race/ethnicity"] == ethnicities[j]][var]
+            ))
+##Taking into account the t statistics, there are significant differences except between the groups A, B and C.
+
+student_df.groupby("parental level of education").mean()[["math score", "reading score", "writing score"]]
+
+## Test whether group differences are significant.
+ethnicities = student_df["parental level of education"].unique()
+grouped_df = student_df.groupby("parental level of education")
+for var in ["math score", "reading score", "writing score"]:
+    print("------------------------------------------------")
+    print("Comparisons for variable: {}".format(var))
+    print("------------------------------------------------")
+    for i in range(0, len(ethnicities)):
+        for j in range(i+1, len(ethnicities)):
+            print(
+                "t-test between groups {0} and {1}:".format(ethnicities[i], ethnicities[j]))
+            print(ttest_ind(
+                student_df[student_df["parental level of education"]
+                           == ethnicities[i]][var],
+                student_df[student_df["parental level of education"]
+                           == ethnicities[j]][var]
+            ))
+            
+##There are some significant differences between some groups like master's degree and high school.
+
+##2. Are there any differences between the lunch types with respect to their performances in exams? If there are, how do you explain this?
+
+student_df.groupby("lunch").mean()[["math score", "reading score", "writing score"]]
+
+ttest_ind(student_df[student_df.lunch == "free/reduced"][["math score", "reading score", "writing score"]],
+          student_df[student_df.lunch == "standard"][["math score", "reading score", "writing score"]])
+          
+##Yes, students who have standard lunch are more successful than the others.
+
+## 3. Does the test preparation course seem to have an effect on the exam performances?
+
+student_df.groupby("test preparation course").mean()[["math score", "reading score", "writing score"]]
+
+ttest_ind(student_df[student_df["test preparation course"] == "completed"][["math score", "reading score", "writing score"]],
+          student_df[student_df["test preparation course"] == "none"][["math score", "reading score", "writing score"]])
+          
+## Yes, those who completed the test preparation course are more successfull than the others.
+
+## 4. Which two exam scores are correlated the most with each other?
+
+student_df[["math score", "reading score", "writing score"]].corr()
