@@ -1,0 +1,182 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from sqlalchemy import create_engine
+import warnings
+
+warnings.filterwarnings('ignore')
+
+postgres_user = 'dsbc_student'
+postgres_pw = '7*.8G9QH21'
+postgres_host = '142.93.121.174'
+postgres_port = '5432'
+postgres_db = 'useducation'
+
+engine = create_engine('postgresql://{}:{}@{}:{}/{}'.format(
+    postgres_user, postgres_pw, postgres_host, postgres_port, postgres_db))
+
+education_df = pd.read_sql_query('select * from useducation',con=engine)
+
+engine.dispose()
+
+## We fill in the missing values using interpolation since our data is a time series data:
+
+fill_list = ["ENROLL", "TOTAL_REVENUE", "FEDERAL_REVENUE",
+             "STATE_REVENUE", "LOCAL_REVENUE", "TOTAL_EXPENDITURE",
+             "INSTRUCTION_EXPENDITURE", "SUPPORT_SERVICES_EXPENDITURE",
+             "OTHER_EXPENDITURE", "CAPITAL_OUTLAY_EXPENDITURE", "GRADES_PK_G",
+             "GRADES_KG_G", "GRADES_4_G", "GRADES_8_G", "GRADES_12_G", "GRADES_1_8_G",
+             "GRADES_9_12_G", "GRADES_ALL_G"]
+
+states = education_df["STATE"].unique()
+
+for state in states:
+    education_df.loc[education_df["STATE"] == state, fill_list] = education_df.loc[education_df["STATE"] == state, fill_list].interpolate()
+
+# we drop the null values after interpolation
+education_df.dropna(inplace=True)
+
+## 1. Derive the descriptive statistics of the data and discuss the points that you think remarkable.
+
+education_df.describe()
+
+##8 rows × 23 columns
+##Average TOTAL_REVENUE is less than TOTAL_EXPENDITURE. This means that states run budget deficit on education on average.
+##INSTRUCTION_EXPENDITURE makes up almost half of the total expenditures on education.
+##FEDERAL_REVENUE is the major source of revenue on average.
+##Average math scores are higher than average reading scores but the standard deviation of the average math scores is also higher than the that of the average reading scores.
+
+## 2. Choose a state (e.g. California) and draw a line graph of its total revenues and total expenditures along the years. How do these two variables evolve during the years? Try to explain the peaks and troughs with some state-wise news and informations around those dates.
+plt.plot(education_df.loc[education_df.STATE == "CALIFORNIA", "YEAR"],
+         education_df.loc[education_df.STATE == "CALIFORNIA", "TOTAL_REVENUE"], label="total revenue")
+
+plt.plot(education_df.loc[education_df.STATE == "CALIFORNIA", "YEAR"],
+         education_df.loc[education_df.STATE == "CALIFORNIA", "TOTAL_EXPENDITURE"], label="total expenditure")
+
+plt.title("total revenue and total expenditure")
+plt.legend()
+plt.show()
+
+##In your chosen state, which one of the lessons the students are more successful, math or reading?
+
+plt.figure(figsize=(20,5))
+
+plt.subplot(1,2,1)
+plt.bar(education_df.loc[education_df.STATE == "CALIFORNIA", "YEAR"],
+         education_df.loc[education_df.STATE == "CALIFORNIA", "AVG_READING_4_SCORE"] - education_df.loc[education_df.STATE == "CALIFORNIA", "AVG_MATH_4_SCORE"])
+
+plt.title("difference between reading and math scores (4)")
+
+plt.subplot(1,2,2)
+plt.bar(education_df.loc[education_df.STATE == "CALIFORNIA", "YEAR"],
+         education_df.loc[education_df.STATE == "CALIFORNIA", "AVG_READING_8_SCORE"] - education_df.loc[education_df.STATE == "CALIFORNIA", "AVG_MATH_8_SCORE"])
+
+plt.title("difference between reading and math scores (8)")
+
+plt.show()
+
+print("difference between reading and math scores (4)")
+print(education_df.loc[education_df.STATE == "CALIFORNIA", "AVG_READING_4_SCORE"] - education_df.loc[education_df.STATE == "CALIFORNIA", "AVG_MATH_4_SCORE"])
+print("difference between reading and math scores (8)")
+print(education_df.loc[education_df.STATE == "CALIFORNIA", "AVG_READING_8_SCORE"] - education_df.loc[education_df.STATE == "CALIFORNIA", "AVG_MATH_8_SCORE"])
+
+##In California, students are more successful at math than reading.
+
+##4. What are the distributions of the math and reading scores in the sample?
+
+plt.figure(figsize=(20,10))
+
+plt.subplot(2,2,1)
+plt.hist(education_df.AVG_READING_4_SCORE.dropna())
+plt.title("histogram of {}".format("AVG_READING_4_SCORE"))
+
+plt.subplot(2,2,2)
+plt.hist(education_df.AVG_MATH_4_SCORE.dropna())
+plt.title("histogram of {}".format("AVG_MATH_4_SCORE"))
+
+plt.subplot(2,2,3)
+plt.hist(education_df.AVG_READING_8_SCORE.dropna())
+plt.title("histogram of {}".format("AVG_READING_8_SCORE"))
+
+plt.subplot(2,2,4)
+plt.hist(education_df.AVG_MATH_8_SCORE.dropna())
+plt.title("histogram of {}".format("AVG_MATH_8_SCORE"))
+plt.show()
+
+##The distributions are not normal distribution but slightly skewed to the left both for reading and writing. This means that average of the scores are lower than the median.
+
+##5. Notice that there are too many missing values for math and reading scores. Fill out the missing values using mean, median and linear interpolation. Then compare the effects of these techniques on the distributions of the score variables.
+
+plt.figure(figsize=(20,20))
+
+plt.subplot(4,4,1)
+plt.hist(education_df.AVG_MATH_4_SCORE.dropna())
+plt.title("histogram of {} (original)".format("AVG_MATH_4_SCORE"))
+
+plt.subplot(4,4,2)
+plt.hist(education_df.AVG_MATH_4_SCORE.interpolate())
+plt.title("histogram of {} (interpolated)".format("AVG_READING_4_SCORE"))
+
+plt.subplot(4,4,3)
+plt.hist(education_df.AVG_MATH_4_SCORE.fillna(education_df.AVG_MATH_4_SCORE.median()))
+plt.title("histogram of {} (filled with median)".format("AVG_MATH_4_SCORE"))
+
+plt.subplot(4,4,4)
+plt.hist(education_df.AVG_MATH_4_SCORE.fillna(education_df.AVG_MATH_4_SCORE.mean()))
+plt.title("histogram of {} (filled with mean)".format("AVG_MATH_4_SCORE"))
+
+
+plt.subplot(4,4,5)
+plt.hist(education_df.AVG_READING_4_SCORE.dropna())
+plt.title("histogram of {} (original)".format("AVG_READING_4_SCORE"))
+
+plt.subplot(4,4,6)
+plt.hist(education_df.AVG_READING_4_SCORE.interpolate())
+plt.title("histogram of {} (interpolated)".format("AVG_READING_4_SCORE"))
+
+plt.subplot(4,4,7)
+plt.hist(education_df.AVG_READING_4_SCORE.fillna(education_df.AVG_READING_4_SCORE.median()))
+plt.title("histogram of {} (filled with median)".format("AVG_READING_4_SCORE"))
+
+plt.subplot(4,4,8)
+plt.hist(education_df.AVG_READING_4_SCORE.fillna(education_df.AVG_READING_4_SCORE.mean()))
+plt.title("histogram of {} (filled with mean)".format("AVG_READING_4_SCORE"))
+
+
+plt.subplot(4,4,9)
+plt.hist(education_df.AVG_MATH_8_SCORE.dropna())
+plt.title("histogram of {} (original)".format("AVG_MATH_8_SCORE"))
+
+plt.subplot(4,4,10)
+plt.hist(education_df.AVG_MATH_8_SCORE.interpolate())
+plt.title("histogram of {} (interpolated)".format("AVG_MATH_8_SCORE"))
+
+plt.subplot(4,4,11)
+plt.hist(education_df.AVG_MATH_8_SCORE.fillna(education_df.AVG_MATH_8_SCORE.median()))
+plt.title("histogram of {} (filled with median)".format("AVG_MATH_8_SCORE"))
+
+plt.subplot(4,4,12)
+plt.hist(education_df.AVG_MATH_8_SCORE.fillna(education_df.AVG_MATH_8_SCORE.mean()))
+plt.title("histogram of {} (filled with mean)".format("AVG_MATH_8_SCORE"))
+
+
+plt.subplot(4,4,13)
+plt.hist(education_df.AVG_READING_8_SCORE.dropna())
+plt.title("histogram of {} (original)".format("AVG_READING_8_SCORE"))
+
+plt.subplot(4,4,14)
+plt.hist(education_df.AVG_READING_8_SCORE.interpolate().dropna())
+plt.title("histogram of {} (interpolated)".format("AVG_READING_8_SCORE"))
+
+plt.subplot(4,4,15)
+plt.hist(education_df.AVG_READING_8_SCORE.fillna(education_df.AVG_READING_8_SCORE.median()))
+plt.title("histogram of {} (filled with median)".format("AVG_READING_8_SCORE"))
+
+plt.subplot(4,4,16)
+plt.hist(education_df.AVG_READING_8_SCORE.fillna(education_df.AVG_READING_8_SCORE.mean()))
+plt.title("histogram of {} (filled with mean)".format("AVG_READING_8_SCORE"))
+
+plt.tight_layout()
+plt.show()
+
+##The technique for filling in the missing values substantially affects the distributions of the variables. Especially in our case, filling with mean or median has the strongest effect. This is probably due to the fact that we have a lot of missing values in our data.
+##The change in the distribution might have some serious effects on our model results. Hence, instead of filling in the missing values with mean or median, we may fill them in using interpolation or we may just discard the missing values.
