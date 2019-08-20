@@ -1,0 +1,130 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from sqlalchemy import create_engine
+import warnings
+
+warnings.filterwarnings('ignore')
+
+postgres_user = 'dsbc_student'
+postgres_pw = '7*.8G9QH21'
+postgres_host = '142.93.121.174'
+postgres_port = '5432'
+postgres_db = 'useducation'
+
+engine = create_engine('postgresql://{}:{}@{}:{}/{}'.format(
+    postgres_user, postgres_pw, postgres_host, postgres_port, postgres_db))
+
+education_df = pd.read_sql_query('select * from useducation',con=engine)
+
+# no need for an open connection, 
+# as we're only doing a single query
+engine.dispose()
+
+##We fill in the missing values using interpolation since our data is a time series data:
+
+fill_list = ["ENROLL", "TOTAL_REVENUE", "FEDERAL_REVENUE",
+             "STATE_REVENUE", "LOCAL_REVENUE", "TOTAL_EXPENDITURE",
+             "INSTRUCTION_EXPENDITURE", "SUPPORT_SERVICES_EXPENDITURE",
+             "OTHER_EXPENDITURE", "CAPITAL_OUTLAY_EXPENDITURE", "GRADES_PK_G",
+             "GRADES_KG_G", "GRADES_4_G", "GRADES_8_G", "GRADES_12_G", "GRADES_1_8_G",
+             "GRADES_9_12_G", "GRADES_ALL_G"]
+
+states = education_df["STATE"].unique()
+
+for state in states:
+    education_df.loc[education_df["STATE"] == state, fill_list] = education_df.loc[education_df["STATE"] == state, fill_list].interpolate()
+
+# we drop the null values after interpolation
+education_df.dropna(inplace=True)
+
+plt.figure(figsize = (15,5))
+
+plt.subplot(1,2,1)
+plt.boxplot(education_df["TOTAL_REVENUE"], whis = 5)
+plt.title("Box plot of total revenue")
+
+plt.subplot(1,2,2)
+plt.boxplot(education_df["TOTAL_EXPENDITURE"], whis = 5)
+plt.title("Box plot of total expenditure")
+plt.show()
+
+from scipy.stats.mstats import winsorize
+
+winsorized_revenue = winsorize(education_df["TOTAL_REVENUE"], (0, 0.05))
+
+winsorized_expenditure = winsorize(education_df["TOTAL_EXPENDITURE"], (0, 0.05))
+
+##1. Consider the two variables: TOTAL_REVENUE and TOTAL_EXPENDITURE. Do these variables have outlier values?
+
+plt.figure(figsize = (15,5))
+
+plt.subplot(1,2,1)
+plt.boxplot(winsorized_revenue, whis = 5)
+plt.title("Box plot of winsorized total revenue")
+
+plt.subplot(1,2,2)
+plt.boxplot(winsorized_expenditure, whis = 5)
+plt.title("Box plot of winsorized total expenditure")
+plt.show()
+
+##If you detect outliers in the TOTAL_REVENUE and TOTAL_EXPENDITURE variables, apply the techniques you learned in this checkpoint to eliminate them and validate that there's no outlier values afterwards you handled them.
+We'll use winsorization to eliminate the outliers and create two new variables called winsorized_revenue and winsorized_expenditure for the winsorized variants.
+
+from scipy.stats.mstats import winsorize
+
+winsorized_revenue = winsorize(education_df["TOTAL_REVENUE"], (0, 0.05))
+
+winsorized_expenditure = winsorize(education_df["TOTAL_EXPENDITURE"], (0, 0.05))
+
+plt.figure(figsize = (15,5))
+
+plt.subplot(1,2,1)
+plt.boxplot(winsorized_revenue, whis = 5)
+plt.title("Box plot of winsorized total revenue")
+
+plt.subplot(1,2,2)
+plt.boxplot(winsorized_expenditure, whis = 5)
+plt.title("Box plot of winsorized total expenditure")
+plt.show()
+
+
+##Create another variable by subtracting the original TOTAL_EXPENDITURE from TOTAL_REVENUE (before you eliminated the outliers). You can think of it as a kind of budget deficit in education. Do you find any outlier values in this new variable? If so, eliminate them using the technique you think most suitable.
+
+budget_deficit = education_df.TOTAL_REVENUE - education_df.TOTAL_EXPENDITURE
+
+plt.boxplot(budget_deficit, whis = 5)
+plt.title("Box plot of budget deficit")
+
+##It seems that we have outliers on both tailes. So, let's winsorize it:
+
+winsorized_budget = winsorize(budget_deficit, (0.05, 0.05))
+plt.boxplot(winsorized_budget, whis = 5)
+plt.title("Box plot of budget deficit")
+
+##Now create another variable by subtracting the TOTAL_EXPENDITURE from TOTAL_REVENUE. But this time, use the outlier eliminated versions of TOTAL_EXPENDITURE from TOTAL_REVENUE. In this newly created variable, can you find any outliers? If so, eliminate them.
+
+budget_deficit2 = winsorized_revenue - winsorized_expenditure
+plt.boxplot(budget_deficit2, whis = 5)
+plt.title("Box plot of budget deficit 2")
+
+##It seems we have outliers, so let's eliminate them:
+
+winsorized_budget2 = winsorize(budget_deficit2, (0.05, 0.05))
+plt.boxplot(winsorized_budget2, whis = 5)
+plt.title("Box plot of budget deficit 2")
+
+##We successfully eliminated many of the outliers. If we increase the lower bound of the winsorization, the remaining few ones also would be eliminated but for consistency with the analysis above, we keep winsorizing the values using 5% as the threshold percentiles at both ends.
+
+##5. Compare some basic statistics of the budget variables you end up with in the third and the fourth questions. Do you see any differences?
+
+pd.DataFrame({"original_budget": budget_deficit, "winsorized_budget1": winsorized_budget,
+              "winsorized_budget2": winsorized_budget2}).describe()
+              
+##For almost all critical statistics, the two variables differ substantially. For example:
+The mean of the first variant is -61210.33 whereas the mean of the second variant is -173636.
+The median of the first variant is -12823.5 whereas the median of the second variant is -14600.5.
+The maximum of the first variant is 560511 whereas the maximum of the second variant is 540055.
+The differences imply that chosing the outlier elimination strategy is very critical as it substantially affects the statistics of the variables
+
+##6. If our variable of interest is the budget deficit variable, which method do you think is the most appropriate one in dealing with the outliers in this variable. The method in the third question or the one in the fourth question?
+Sometimes, differencing may help us to eliminate the outliers. So, it's better to first create a variable from the originals and then to apply outlier elimination techniques next. Hence, the approach in the third question is more desirable in most of the cases.
