@@ -1,0 +1,67 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from sqlalchemy import create_engine
+import warnings
+
+warnings.filterwarnings('ignore')
+
+postgres_user = 'dsbc_student'
+postgres_pw = '7*.8G9QH21'
+postgres_host = '142.93.121.174'
+postgres_port = '5432'
+postgres_db = 'useducation'
+
+engine = create_engine('postgresql://{}:{}@{}:{}/{}'.format(
+    postgres_user, postgres_pw, postgres_host, postgres_port, postgres_db))
+
+education_df = pd.read_sql_query('select * from useducation',con=engine)
+
+engine.dispose()
+
+education_df.info()
+
+education_df.isnull().sum()/education_df.isnull().count()
+
+education2_df = education_df.copy()
+
+fill_list = ["ENROLL", "TOTAL_REVENUE", "FEDERAL_REVENUE", 
+             "STATE_REVENUE", "LOCAL_REVENUE", "TOTAL_EXPENDITURE", 
+             "INSTRUCTION_EXPENDITURE", "SUPPORT_SERVICES_EXPENDITURE",
+             "OTHER_EXPENDITURE", "CAPITAL_OUTLAY_EXPENDITURE", "GRADES_PK_G", 
+             "GRADES_KG_G", "GRADES_4_G", "GRADES_8_G", "GRADES_12_G", "GRADES_1_8_G", 
+             "GRADES_9_12_G", "GRADES_ALL_G"]
+
+for col in fill_list:
+    education2_df.loc[:, col].fillna(education2_df.loc[:, col].mean(), inplace=True)
+education3_df = education_df.copy()
+
+years = education3_df["YEAR"].unique()
+
+for col in fill_list:
+    for year in years:
+        education3_df.loc[education3_df["YEAR"] == year, col].fillna(
+            education3_df[education3_df["YEAR"] == year][col].mean(), inplace=True)
+            
+education4_df = education_df.copy()
+
+for col in fill_list:
+    education4_df.loc[:, col].interpolate(inplace=True)
+    
+for col in fill_list:
+    print("Statistics for columns: {}".format(col))
+    print(pd.concat([education_df[col], education2_df[col],
+                     education3_df[col], education4_df[col]], axis=1).describe())
+                     
+fig = plt.figure(figsize=(20,100))
+
+for i, col in enumerate(fill_list):
+    df = pd.concat([education_df[col], education2_df[col],
+                     education3_df[col], education4_df[col]], axis=1)
+    
+    plt.subplot(len(fill_list), 4, i+1)
+    plt.bar(["original", "overall", "year-by-year", "interpolation"], df.median())
+    plt.xticks(rotation='vertical')
+    plt.title("Mod of {}".format(col))
+    
+plt.tight_layout()
+plt.show()
