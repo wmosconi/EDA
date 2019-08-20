@@ -1,0 +1,84 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sqlalchemy import create_engine
+import warnings
+
+warnings.filterwarnings('ignore')
+sns.set(style="whitegrid")
+
+postgres_user = 'dsbc_student'
+postgres_pw = '7*.8G9QH21'
+postgres_host = '142.93.121.174'
+postgres_port = '5432'
+postgres_db = 'useducation'
+
+engine = create_engine('postgresql://{}:{}@{}:{}/{}'.format(
+    postgres_user, postgres_pw, postgres_host, postgres_port, postgres_db))
+
+education_df = pd.read_sql_query('select * from useducation',con=engine)
+
+engine.dispose()
+
+##We fill in the missing values using interpolation since our data is a time series data:
+
+fill_list = ["ENROLL", "TOTAL_REVENUE", "FEDERAL_REVENUE",
+             "STATE_REVENUE", "LOCAL_REVENUE", "TOTAL_EXPENDITURE",
+             "INSTRUCTION_EXPENDITURE", "SUPPORT_SERVICES_EXPENDITURE",
+             "OTHER_EXPENDITURE", "CAPITAL_OUTLAY_EXPENDITURE", "GRADES_PK_G",
+             "GRADES_KG_G", "GRADES_4_G", "GRADES_8_G", "GRADES_12_G", "GRADES_1_8_G",
+             "GRADES_9_12_G", "GRADES_ALL_G"]
+
+states = education_df["STATE"].unique()
+
+for state in states:
+    education_df.loc[education_df["STATE"] == state, fill_list] = education_df.loc[education_df["STATE"] == state, fill_list].interpolate()
+
+## we drop the null values after interpolation
+education_df.dropna(inplace=True)
+
+## 1. Create a new score variable from the weighted averages of the all score variables in the datasets. Notice that the number of students in the fourth grade isn't the same with the number of students in the eighth grade. So, you should weight the scores appropriately!.
+
+education_df["overall_score"] = (education_df["GRADES_4_G"]*((education_df["AVG_MATH_4_SCORE"] + education_df["AVG_READING_4_SCORE"])*0.5) + education_df["GRADES_8_G"]
+                                 * ((education_df["AVG_MATH_8_SCORE"] + education_df["AVG_READING_8_SCORE"])*0.5))/(education_df["GRADES_4_G"] + education_df["GRADES_8_G"])
+
+## We weighted the score variables using the number of students in the respective grades. 
+
+## 2. What are the correlations between this newly created score variable and the expenditure types? Which one of the expenditure type is more correlated than the others?
+
+education_df[["overall_score", "TOTAL_EXPENDITURE", "INSTRUCTION_EXPENDITURE",
+              "SUPPORT_SERVICES_EXPENDITURE", "OTHER_EXPENDITURE", "CAPITAL_OUTLAY_EXPENDITURE"]].corr()
+              
+##The most correlated variable with the overall score is the instruction expenditure
+
+## 3. Now, apply PCA to the four expenditure types. How much of the total variance is explained by the first component?
+
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+X = education_df[["INSTRUCTION_EXPENDITURE", "SUPPORT_SERVICES_EXPENDITURE",
+                  "OTHER_EXPENDITURE", "CAPITAL_OUTLAY_EXPENDITURE"]]
+
+X = StandardScaler().fit_transform(X)
+
+sklearn_pca = PCA(n_components=1)
+education_df["pca_1"] = sklearn_pca.fit_transform(X)
+
+print(
+    'The percentage of total variance in the dataset explained by each',
+    'component from Sklearn PCA.\n',
+    sklearn_pca.explained_variance_ratio_
+)
+
+## The percentage of total variance in the dataset explained by each component from Sklearn PCA.
+ [0.94252701]
+ 
+## 4. What is the correlation between the overall score variable and the first principal component?
+
+education_df[["overall_score", "pca_1", "TOTAL_EXPENDITURE", "INSTRUCTION_EXPENDITURE",
+              "SUPPORT_SERVICES_EXPENDITURE", "OTHER_EXPENDITURE", "CAPITAL_OUTLAY_EXPENDITURE"]].corr()
+              
+## The correlation of the first principal component is less than the instruction expenditure and the support service expenditure variables.
+
+## 5. If you were to choose the best variables for your model, would you prefer using the first principal component instead of the expenditure variables? Why?
+## Instruction expenditure variable is more correlated with the overall score than the first principal component. Hence using instruction expenditure makes more sense. PCA works best when the correlation between the variables are less than and equal to 0.8. In our case, all of the expenditure variables are highly correlated with each other. This may result in instable principal component estimations.
